@@ -34,12 +34,12 @@ const userSchema = new mongoose.Schema(
 );
 
 // Hash password before save if modified
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+// Use promise-based middleware (no `next` callback) to avoid "next is not a function" errors
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-  next();
 });
 
 // Instance method: compare password
