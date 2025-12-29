@@ -6,13 +6,16 @@ const connectDB = require('./src/config/database.js');
 const app = express();
 connectDB();
 
+// Middleware
 app.use(express.json());
 
 // routes
 const authRoutes = require('./src/routes/authRoutes');
-
-app.use(express.json());
+const slotRoutes = require('./src/routes/slotRoutes');
+const doctorRoutes = require('./src/routes/doctorRoutes');
 app.use('/api/auth', authRoutes);
+app.use('/api/slots', slotRoutes);
+app.use('/api/doctors', doctorRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
