@@ -2,6 +2,12 @@
 const express = require('express');
 const { protect } = require('../middlewares/authMiddleware');
 const { authorizeRoles } = require('../middlewares/roleMiddleware');
+const validate = require('../middlewares/validate');
+const {
+  validateObjectId,
+  validateObjectIdParam,
+  validateOptionalString,
+} = require('../utils/validation');
 const {
   createBooking,
   getMyBookings,
@@ -14,7 +20,14 @@ const {
 const router = express.Router();
 
 // POST /api/bookings - Create a booking (User)
-router.post('/', protect, authorizeRoles('admin', 'user'), createBooking);
+router.post(
+  '/',
+  protect,
+  authorizeRoles('admin', 'user'),
+  [validateObjectId('slotId')],
+  validate,
+  createBooking
+);
 
 // GET /api/bookings/my-bookings - Get user's bookings (User)
 // This must come before the generic GET / route to avoid route conflicts
@@ -24,13 +37,34 @@ router.get('/my-bookings', protect, authorizeRoles('admin', 'user'), getMyBookin
 router.get('/', protect, authorizeRoles('admin'), getAllBookings);
 
 // PATCH /api/bookings/:id/cancel - Cancel booking (User/Admin)
-router.patch('/:id/cancel', protect, authorizeRoles('admin', 'user'), cancelBooking);
+router.patch(
+  '/:id/cancel',
+  protect,
+  authorizeRoles('admin', 'user'),
+  [validateObjectIdParam('id'), validateOptionalString('cancellationReason')],
+  validate,
+  cancelBooking
+);
 
 // PATCH /api/bookings/:id/reschedule - Reschedule booking (User)
-router.patch('/:id/reschedule', protect, authorizeRoles('admin', 'user'), rescheduleBooking);
+router.patch(
+  '/:id/reschedule',
+  protect,
+  authorizeRoles('admin', 'user'),
+  [validateObjectIdParam('id'), validateObjectId('newSlotId')],
+  validate,
+  rescheduleBooking
+);
 
 // PATCH /api/bookings/:id/complete - Mark as completed (Admin)
-router.patch('/:id/complete', protect, authorizeRoles('admin'), completeBooking);
+router.patch(
+  '/:id/complete',
+  protect,
+  authorizeRoles('admin'),
+  [validateObjectIdParam('id')],
+  validate,
+  completeBooking
+);
 
 module.exports = router;
 
