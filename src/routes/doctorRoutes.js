@@ -10,7 +10,7 @@ const {
   validateEmail,
   validateTime,
 } = require('../utils/validation');
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const {
   createDoctor,
   getDoctors,
@@ -62,7 +62,23 @@ router.post(
 );
 
 // GET /api/doctors - Get all doctors (Admin & User)
-router.get('/', protect, authorizeRoles('admin', 'user'), getDoctors);
+router.get(
+  '/',
+  protect,
+  authorizeRoles('admin', 'user'),
+  [
+    query('page')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('page must be a positive integer'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage('limit must be between 1 and 50'),
+  ],
+  validate,
+  getDoctors
+);
 
 // GET /api/doctors/:id - Get doctor by id (Admin & User)
 router.get(

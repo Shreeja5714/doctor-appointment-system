@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 const User = require('../models/User');
+const { getPaginationParams } = require('../utils/pagination');
 
 // POST /api/doctors - Create a doctor profile (Admin only)
 // Body: { userId, name, specialization, email, availability? }
@@ -63,11 +64,23 @@ const createDoctor = async (req, res) => {
 
 // GET /api/doctors - Get all doctors
 const getDoctors = async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+
   try {
-    const doctors = await Doctor.find().sort({ name: 1 }).lean();
+    const [total, doctors] = await Promise.all([
+      Doctor.countDocuments(),
+      Doctor.find()
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
       count: doctors.length,
       data: doctors,
     });

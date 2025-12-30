@@ -58,6 +58,14 @@ router.get(
       .optional()
       .matches(/^\d{4}-\d{2}-\d{2}$/)
       .withMessage('End date must be in YYYY-MM-DD format'),
+    query('page')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('page must be a positive integer'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage('limit must be between 1 and 50'),
   ],
   validate,
   getAvailableSlots
@@ -74,6 +82,14 @@ router.get(
       .optional()
       .isIn(['available', 'booked', 'blocked'])
       .withMessage('Status must be one of: available, booked, blocked'),
+    query('page')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('page must be a positive integer'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage('limit must be between 1 and 50'),
   ],
   validate,
   getDoctorSlots

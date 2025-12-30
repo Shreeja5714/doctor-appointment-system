@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const Booking = require('../models/Booking');
 const Slot = require('../models/Slot');
 const Doctor = require('../models/Doctor');
+const { isSlotInPast } = require('../utils/time');
+const { getPaginationParams } = require('../utils/pagination');
 
 // POST /api/bookings - Create a booking (User)
 // Body: { slotId }
@@ -38,6 +40,14 @@ const createBooking = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Slot not found',
+      });
+    }
+
+    // Time-based guard: don't allow booking past slots
+    if (isSlotInPast(slot)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot book a slot in the past',
       });
     }
 
@@ -110,6 +120,15 @@ const createBooking = async (req, res) => {
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
+
+      // Handle potential duplicate key error from partial unique index on slotId
+      if (err && err.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Slot is already booked',
+        });
+      }
+
       throw err;
     }
   } catch (err) {
@@ -124,16 +143,25 @@ const createBooking = async (req, res) => {
 // GET /api/bookings/my-bookings - Get user's bookings (User)
 const getMyBookings = async (req, res) => {
   const userId = req.user._id;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
   try {
-    const bookings = await Booking.find({ userId })
-      .populate('slotId')
-      .populate('doctorId', 'name specialization email')
-      .sort({ createdAt: -1 })
-      .lean();
+    const [total, bookings] = await Promise.all([
+      Booking.countDocuments({ userId }),
+      Booking.find({ userId })
+        .populate('slotId')
+        .populate('doctorId', 'name specialization email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
       count: bookings.length,
       data: bookings,
     });
@@ -148,16 +176,26 @@ const getMyBookings = async (req, res) => {
 
 // GET /api/bookings - Get all bookings (Admin)
 const getAllBookings = async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+
   try {
-    const bookings = await Booking.find()
-      .populate('userId', 'name email')
-      .populate('slotId')
-      .populate('doctorId', 'name specialization email')
-      .sort({ createdAt: -1 })
-      .lean();
+    const [total, bookings] = await Promise.all([
+      Booking.countDocuments(),
+      Booking.find()
+        .populate('userId', 'name email')
+        .populate('slotId')
+        .populate('doctorId', 'name specialization email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
       count: bookings.length,
       data: bookings,
     });
@@ -213,6 +251,22 @@ const cancelBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Cannot cancel a completed booking',
+      });
+    }
+
+    if (booking.bookingStatus === 'expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot cancel an expired booking',
+      });
+    }
+
+    // Check if associated slot is already in the past
+    const currentSlot = await Slot.findById(booking.slotId);
+    if (currentSlot && isSlotInPast(currentSlot)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot cancel a booking for a past slot',
       });
     }
 
@@ -322,12 +376,36 @@ const rescheduleBooking = async (req, res) => {
       });
     }
 
+    if (booking.bookingStatus === 'expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot reschedule an expired booking',
+      });
+    }
+
+    // Prevent rescheduling if current slot is already in the past
+    const currentSlot = await Slot.findById(booking.slotId);
+    if (currentSlot && isSlotInPast(currentSlot)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot reschedule a booking for a past slot',
+      });
+    }
+
     // Check if new slot exists and is available
     const newSlot = await Slot.findById(newSlotId);
     if (!newSlot) {
       return res.status(404).json({
         success: false,
         message: 'New slot not found',
+      });
+    }
+
+    // Time-based guard: new slot cannot be in the past
+    if (isSlotInPast(newSlot)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot reschedule to a past slot',
       });
     }
 
@@ -419,7 +497,7 @@ const completeBooking = async (req, res) => {
   }
 
   try {
-    const booking = await Booking.findById(id);
+    const booking = await Booking.findById(id).populate('slotId');
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -438,6 +516,21 @@ const completeBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Cannot complete a cancelled booking',
+      });
+    }
+
+    if (booking.bookingStatus === 'expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete an expired booking',
+      });
+    }
+
+    // Enforce time-based completion: only allow completing past slots
+    if (booking.slotId && !isSlotInPast(booking.slotId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete a booking for a future slot',
       });
     }
 
@@ -463,6 +556,45 @@ const completeBooking = async (req, res) => {
   }
 };
 
+// PATCH /api/bookings/expire-past - Mark eligible pending/confirmed bookings as expired (Admin)
+const expirePastBookings = async (req, res) => {
+  try {
+    // Load bookings that are still active
+    const activeBookings = await Booking.find({
+      bookingStatus: { $in: ['pending', 'confirmed'] },
+    }).populate('slotId');
+
+    const toExpireIds = activeBookings
+      .filter((booking) => booking.slotId && isSlotInPast(booking.slotId))
+      .map((booking) => booking._id);
+
+    if (toExpireIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No bookings to expire',
+        count: 0,
+      });
+    }
+
+    const result = await Booking.updateMany(
+      { _id: { $in: toExpireIds } },
+      { $set: { bookingStatus: 'expired' } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Expired past bookings successfully',
+      count: result.modifiedCount || 0,
+    });
+  } catch (err) {
+    console.error('Expire past bookings error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while expiring bookings',
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getMyBookings,
@@ -470,6 +602,7 @@ module.exports = {
   cancelBooking,
   rescheduleBooking,
   completeBooking,
+  expirePastBookings,
 };
 
 

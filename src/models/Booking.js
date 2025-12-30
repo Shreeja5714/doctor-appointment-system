@@ -38,5 +38,18 @@ const bookingSchema = new mongoose.Schema(
   }
 );
 
+// Ensure at most one *active* (pending/confirmed) booking exists per slot.
+// This is a partial unique index so that cancelled/completed/expired bookings
+// do not block future bookings for the same slot.
+bookingSchema.index(
+  { slotId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      bookingStatus: { $in: ['pending', 'confirmed'] },
+    },
+  }
+);
+
 const Booking = mongoose.model('Booking', bookingSchema);
 module.exports = Booking;

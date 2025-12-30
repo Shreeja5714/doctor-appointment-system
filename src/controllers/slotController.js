@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 const Slot = require('../models/Slot');
 const { generateSlotsForDoctor } = require('../utils/slotGenerator');
+const { getPaginationParams } = require('../utils/pagination');
 
 // POST /api/slots/generate - Generate slots for a doctor (Admin only)
 // Body: { doctorId, startDate, endDate, slotDurationMinutes?, timezone }
@@ -57,10 +58,11 @@ const generateSlots = async (req, res) => {
 };
 
 // GET /api/slots/doctor/:doctorId - View all slots for a doctor
-// Optional query params: ?status=available|booked|blocked
+// Optional query params: ?status=available|booked|blocked, with pagination
 const getDoctorSlots = async (req, res) => {
   const { doctorId } = req.params;
   const { status } = req.query;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
   if (!mongoose.Types.ObjectId.isValid(doctorId)) {
     return res.status(400).json({
@@ -75,12 +77,20 @@ const getDoctorSlots = async (req, res) => {
   }
 
   try {
-    const slots = await Slot.find(filter)
-      .sort({ date: 1, startTime: 1 })
-      .lean();
+    const [total, slots] = await Promise.all([
+      Slot.countDocuments(filter),
+      Slot.find(filter)
+        .sort({ date: 1, startTime: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
       count: slots.length,
       data: slots,
     });
@@ -132,9 +142,10 @@ const blockSlot = async (req, res) => {
 };
 
 // GET /api/slots/available - Get available slots (with filters)
-// Query params: doctorId, date, startDate, endDate
+// Query params: doctorId, date, startDate, endDate, plus pagination
 const getAvailableSlots = async (req, res) => {
   const { doctorId, date, startDate, endDate } = req.query;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
   try {
     // Build filter - always filter by status 'available'
@@ -216,12 +227,20 @@ const getAvailableSlots = async (req, res) => {
       }
     }
 
-    const slots = await Slot.find(filter)
-      .sort({ date: 1, startTime: 1 })
-      .lean();
+    const [total, slots] = await Promise.all([
+      Slot.countDocuments(filter),
+      Slot.find(filter)
+        .sort({ date: 1, startTime: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     return res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
       count: slots.length,
       data: slots,
     });
