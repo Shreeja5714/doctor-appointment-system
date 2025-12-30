@@ -75,11 +75,13 @@ All protected routes expect: Authorization: Bearer <jwt_token>
     "password": "Password1",
     "role": "user"   // optional: "admin" or "user"
   }
+  
 •  POST /api/auth/login - Login and receive a JWT.
    {
     "email": "john@example.com",
     "password": "Password1"
   }
+  
 •  GET /api/auth/me - Get current authenticated user.
 
 •  GET /api/auth/admin-only - Example admin-only protected route.
@@ -100,10 +102,12 @@ All protected routes expect: Authorization: Bearer <jwt_token>
       }
     ]
   }
-  •  GET /api/doctors (admin, user) - List doctors (paginated).
+
+•  GET /api/doctors (admin, user) - List doctors (paginated).
   Query (optional):
 •  page: positive integer
 •  limit: 1–50
+
 •  GET /api/doctors/:id (admin, user)  
   Get doctor by ID.
 
@@ -117,6 +121,7 @@ All protected routes expect: Authorization: Bearer <jwt_token>
     "slotDurationMinutes": 30,
     "timezone": "Asia/Kolkata"
   }
+  
 •  GET /api/slots/available (admin, user) - List available slots by filters + pagination.
   Query (optional):
  •  doctorId: doctor ObjectId
@@ -124,12 +129,15 @@ All protected routes expect: Authorization: Bearer <jwt_token>
  •  Or startDate, endDate: YYYY-MM-DD
  •  page: positive integer
  •  limit: 1–50
+ 
 •  GET /api/slots/doctor/:doctorId (admin, user) - List slots for a doctor (with filters + pagination).
   Query (optional):
  •  status: available | booked | blocked
  •  page: positive integer
  •  limit: 1–50
+ 
 •  PATCH /api/slots/:slotId/block (admin) - Block a slot.
+
 •  DELETE /api/slots/:slotId (admin) - Delete a slot.
 
 ### Booking Routes (/api/bookings)
@@ -138,27 +146,33 @@ All protected routes expect: Authorization: Bearer <jwt_token>
   {
     "slotId": "SLOT_OBJECT_ID"
   }
+  
 •  GET /api/bookings/my-bookings (admin, user) - List bookings of the current user (paginated).
   Query (optional):
  •  page: positive integer
  •  limit: 1–50
+ 
 •  GET /api/bookings (admin) - List all bookings (paginated).
   Query (optional):
  •  page: positive integer
  •  limit: 1–50
+ 
 •  PATCH /api/bookings/:id/cancel (admin or owner) - Cancel a booking (only if not completed/expired and slot is not in the past).
   {
     "cancellationReason": "Change of plans"
   }
+  
 •  PATCH /api/bookings/:id/reschedule (owner user) - Reschedule to a new slot for the same doctor (new slot must be available and not in the past).
    {
     "newSlotId": "NEW_SLOT_OBJECT_ID"
   }
+  
 •  PATCH /api/bookings/:id/complete (admin) - Mark a booking as completed (only for past slots).
 
 •  PATCH /api/bookings/expire-past (admin) - Mark all eligible pending/confirmed bookings whose slots are in the past as expired.
 
 ## Project Structure
+
 doctor-appointment-system/
 ├── src/
 │   ├── config/
