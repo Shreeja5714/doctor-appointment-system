@@ -172,7 +172,7 @@ All protected routes expect: Authorization: Bearer <jwt_token>
 •  PATCH /api/bookings/expire-past (admin) - Mark all eligible pending/confirmed bookings whose slots are in the past as expired.
 
 ## Project Structure
-
+```
 doctor-appointment-system/
 ├── src/
 │   ├── config/
@@ -202,3 +202,4 @@ doctor-appointment-system/
 ├── .gitignore
 ├── package.json
 └── server.js
+```
